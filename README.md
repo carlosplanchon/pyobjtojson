@@ -1,6 +1,6 @@
 # pyobjtojson
 
-A lightweight Python library that simplifies the process of serializing **any** Python object into a JSON-friendly structure—without getting tripped up by circular references. With built-in support for dataclasses, Pydantic (v1 & v2), and standard Python collections, **pyobjtojson** helps you convert your objects into a cycle-free, JSON-ready format for logging, storage, or data transfer.
+A lightweight Python library that simplifies the process of serializing **any** Python object into a JSON-friendly structure without getting tripped up by circular references. With built-in support for dataclasses, Pydantic (v1 & v2), and standard Python collections, **pyobjtojson** helps you convert your objects into a cycle-free, JSON-ready format for logging, storage, or data transfer.
 
 ## Features
 
