@@ -8,7 +8,7 @@ packages = ["pyobjtojson"]
 
 [project]
 name = "pyobjtojson"
-version = "0.2"
+version = "0.3"
 authors = [
     {name = "Carlos A. Planchón", email = "carlosandresplanchonprestes@gmail.com"},
 ]
