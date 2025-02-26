@@ -12,7 +12,7 @@ A lightweight Python library that simplifies the process of serializing **any** 
   No special inheritance or overrides needed. Uses reflection and standard Python methods (`__dict__`, `asdict()`, `to_dict()`, etc.) where available.
 - **Easy to Integrate**  
   Just call `obj_to_json()` on your data structure—no additional configuration required.
-  
+
 ## Installation
 
 ```bash
@@ -59,7 +59,7 @@ a = {"name": "A"}
 b = {"circular": a}
 a["b"] = b  # Creates a circular reference
 
-obj_to_json(a)
+obj_to_json(a, check_circular=True)  # check_circular is True by default.
 ```
 
 **Output**:
