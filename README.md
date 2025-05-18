@@ -13,6 +13,8 @@ A lightweight Python library that simplifies the process of serializing **any** 
 - **Easy to Integrate**  
   Just call `obj_to_json()` on your data structure—no additional configuration required.
 
+### DeepWiki Docs: [https://deepwiki.com/carlosplanchon/pyobjtojson](https://deepwiki.com/carlosplanchon/pyobjtojson)
+
 ## Installation
 
 ```bash
