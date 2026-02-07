@@ -28,5 +28,25 @@ readme = "README.md"
 [project.urls]
 Repository = "https://github.com/carlosplanchon/pyobjtojson.git"
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pydantic>=2.0.0"
+]
+
 [tool.setuptools]
 packages = ["pyobjtojson"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--cov=pyobjtojson",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+]

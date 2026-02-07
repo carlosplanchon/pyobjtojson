@@ -4,7 +4,7 @@ import dataclasses
 from collections.abc import Mapping, Sequence
 
 
-def _serialize_for_json(obj, visited, check_circular=True):
+def _serialize_for_json(obj, visited, check_circular=True, _skip_circular_check=False):
     """
     Internal recursion logic that can handle circular references
     using `visited`. This includes careful exception handling so
@@ -13,11 +13,13 @@ def _serialize_for_json(obj, visited, check_circular=True):
     :param obj: The object to serialize.
     :param visited: A set used to track visited objects (for cycle detection).
     :param check_circular: Whether to check for and mark circular references.
+    :param _skip_circular_check: Internal flag to skip adding intermediate
+                                   conversion results to visited set.
     :return: A JSON-serializable structure, or a string if it cannot be
              converted more structurally.
     """
 
-    # If it's None, bool, int, float, or str, it’s already JSON-serializable.
+    # If it's None, bool, int, float, or str, it's already JSON-serializable.
     if obj is None or isinstance(obj, (bool, int, float, str)):
         return obj
 
@@ -25,7 +27,7 @@ def _serialize_for_json(obj, visited, check_circular=True):
 
     # If circular checking is enabled, see if we've already
     # visited this object.
-    if check_circular is True:
+    if check_circular is True and not _skip_circular_check:
         if obj_id in visited:
             return "<circular reference>"
         visited.add(obj_id)
@@ -63,10 +65,13 @@ def _serialize_for_json(obj, visited, check_circular=True):
     if hasattr(obj, "model_dump") and callable(obj.model_dump):
         try:
             model_data = obj.model_dump()
+            # Skip circular check for the intermediate dict to avoid false positives
+            # when Python reuses memory addresses
             return _serialize_for_json(
                 obj=model_data,
                 visited=visited,
-                check_circular=check_circular
+                check_circular=check_circular,
+                _skip_circular_check=True
             )
         except Exception:
             # Fall through to next check if this fails
@@ -76,10 +81,12 @@ def _serialize_for_json(obj, visited, check_circular=True):
     if hasattr(obj, "dict") and callable(obj.dict):
         try:
             dict_data = obj.dict()
+            # Skip circular check for the intermediate dict
             return _serialize_for_json(
                 obj=dict_data,
                 visited=visited,
-                check_circular=check_circular
+                check_circular=check_circular,
+                _skip_circular_check=True
             )
         except Exception:
             # Fall through to next check if this fails
@@ -89,10 +96,12 @@ def _serialize_for_json(obj, visited, check_circular=True):
     if dataclasses.is_dataclass(obj):
         try:
             dc_data = dataclasses.asdict(obj)
+            # Skip circular check for the intermediate dict
             return _serialize_for_json(
                 obj=dc_data,
                 visited=visited,
-                check_circular=check_circular
+                check_circular=check_circular,
+                _skip_circular_check=True
             )
         except Exception:
             # Fall through to next check if this fails
@@ -102,10 +111,12 @@ def _serialize_for_json(obj, visited, check_circular=True):
     if hasattr(obj, "to_dict") and callable(obj.to_dict):
         try:
             custom_dict_data = obj.to_dict()
+            # Skip circular check for the intermediate dict
             return _serialize_for_json(
                 obj=custom_dict_data,
                 visited=visited,
-                check_circular=check_circular
+                check_circular=check_circular,
+                _skip_circular_check=True
             )
         except Exception:
             # Fall through to next check if this fails
@@ -114,10 +125,12 @@ def _serialize_for_json(obj, visited, check_circular=True):
     # If the object has a __dict__, recurse into that
     if hasattr(obj, "__dict__"):
         try:
+            # Skip circular check for the __dict__ to avoid false positives
             return _serialize_for_json(
                 obj=obj.__dict__,
                 visited=visited,
-                check_circular=check_circular
+                check_circular=check_circular,
+                _skip_circular_check=True
             )
         except Exception:
             # Fall through to next check if this fails
