@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 
+import base64
 import dataclasses
 from collections.abc import Mapping, Sequence
+from datetime import datetime, date, time
+from decimal import Decimal
+from enum import Enum
+from pathlib import Path
+from uuid import UUID
 
 
-def _serialize_for_json(obj, visited, check_circular=True, _skip_circular_check=False):
+def _serialize_for_json(obj, visited, check_circular=True, _skip_circular_check=False, decimal_as_float=True):
     """
     Internal recursion logic that can handle circular references
     using `visited`. This includes careful exception handling so
@@ -15,6 +21,7 @@ def _serialize_for_json(obj, visited, check_circular=True, _skip_circular_check=
     :param check_circular: Whether to check for and mark circular references.
     :param _skip_circular_check: Internal flag to skip adding intermediate
                                    conversion results to visited set.
+    :param decimal_as_float: If True, convert Decimal to float; otherwise to string.
     :return: A JSON-serializable structure, or a string if it cannot be
              converted more structurally.
     """
@@ -22,6 +29,47 @@ def _serialize_for_json(obj, visited, check_circular=True, _skip_circular_check=
     # If it's None, bool, int, float, or str, it's already JSON-serializable.
     if obj is None or isinstance(obj, (bool, int, float, str)):
         return obj
+
+    # === Standard Python types support ===
+
+    # datetime, date, time → ISO format
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    if isinstance(obj, date):
+        return obj.isoformat()
+    if isinstance(obj, time):
+        return obj.isoformat()
+
+    # UUID → string
+    if isinstance(obj, UUID):
+        return str(obj)
+
+    # Decimal → float or string
+    if isinstance(obj, Decimal):
+        if decimal_as_float:
+            return float(obj)
+        return str(obj)
+
+    # bytes, bytearray → base64
+    if isinstance(obj, (bytes, bytearray)):
+        return base64.b64encode(bytes(obj)).decode('utf-8')
+
+    # Enum → underlying value
+    if isinstance(obj, Enum):
+        return obj.value
+
+    # Path → string
+    if isinstance(obj, Path):
+        return str(obj)
+
+    # set, frozenset → list
+    if isinstance(obj, (set, frozenset)):
+        try:
+            # Try to sort if elements are comparable
+            return sorted(list(obj))
+        except TypeError:
+            # If not sortable, convert to list without sorting
+            return list(obj)
 
     obj_id = id(obj)
 
@@ -39,7 +87,8 @@ def _serialize_for_json(obj, visited, check_circular=True, _skip_circular_check=
         for key, value in obj.items():
             try:
                 result[key] = _serialize_for_json(
-                    value, visited, check_circular=check_circular
+                    value, visited, check_circular=check_circular,
+                    decimal_as_float=decimal_as_float
                 )
             except Exception as exc:
                 result[key] = f"<serialization error: {exc}>"
@@ -54,7 +103,8 @@ def _serialize_for_json(obj, visited, check_circular=True, _skip_circular_check=
                     _serialize_for_json(
                         obj=item,
                         visited=visited,
-                        check_circular=check_circular
+                        check_circular=check_circular,
+                        decimal_as_float=decimal_as_float
                     )
                 )
             except Exception as exc:
@@ -71,7 +121,8 @@ def _serialize_for_json(obj, visited, check_circular=True, _skip_circular_check=
                 obj=model_data,
                 visited=visited,
                 check_circular=check_circular,
-                _skip_circular_check=True
+                _skip_circular_check=True,
+                decimal_as_float=decimal_as_float
             )
         except Exception:
             # Fall through to next check if this fails
@@ -86,7 +137,8 @@ def _serialize_for_json(obj, visited, check_circular=True, _skip_circular_check=
                 obj=dict_data,
                 visited=visited,
                 check_circular=check_circular,
-                _skip_circular_check=True
+                _skip_circular_check=True,
+                decimal_as_float=decimal_as_float
             )
         except Exception:
             # Fall through to next check if this fails
@@ -101,7 +153,8 @@ def _serialize_for_json(obj, visited, check_circular=True, _skip_circular_check=
                 obj=dc_data,
                 visited=visited,
                 check_circular=check_circular,
-                _skip_circular_check=True
+                _skip_circular_check=True,
+                decimal_as_float=decimal_as_float
             )
         except Exception:
             # Fall through to next check if this fails
@@ -116,7 +169,8 @@ def _serialize_for_json(obj, visited, check_circular=True, _skip_circular_check=
                 obj=custom_dict_data,
                 visited=visited,
                 check_circular=check_circular,
-                _skip_circular_check=True
+                _skip_circular_check=True,
+                decimal_as_float=decimal_as_float
             )
         except Exception:
             # Fall through to next check if this fails
@@ -130,7 +184,8 @@ def _serialize_for_json(obj, visited, check_circular=True, _skip_circular_check=
                 obj=obj.__dict__,
                 visited=visited,
                 check_circular=check_circular,
-                _skip_circular_check=True
+                _skip_circular_check=True,
+                decimal_as_float=decimal_as_float
             )
         except Exception:
             # Fall through to next check if this fails
@@ -145,18 +200,30 @@ def _serialize_for_json(obj, visited, check_circular=True, _skip_circular_check=
         return f"<serialization error: {exc}>"
 
 
-def obj_to_json(obj, check_circular=True):
+def obj_to_json(obj, check_circular=True, decimal_as_float=True):
     """
     Public-facing function that starts with a fresh visited set
     to handle cycles (if `check_circular=True`). Calls the internal
     _serialize_for_json.
 
+    Supports standard Python types including:
+    - datetime, date, time (converted to ISO format)
+    - UUID (converted to string)
+    - Decimal (converted to float or string based on decimal_as_float)
+    - bytes, bytearray (converted to base64)
+    - Enum (converted to underlying value)
+    - Path (converted to string)
+    - set, frozenset (converted to sorted list)
+
     :param obj: The object to serialize to JSON-like structures.
     :param check_circular: If True, detect and mark circular references.
+    :param decimal_as_float: If True, convert Decimal to float; otherwise to string.
+                             Default is True.
     """
     visited = set()
     return _serialize_for_json(
         obj=obj,
         visited=visited,
-        check_circular=check_circular
+        check_circular=check_circular,
+        decimal_as_float=decimal_as_float
     )

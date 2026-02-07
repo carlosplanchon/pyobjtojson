@@ -4,13 +4,15 @@ A lightweight Python library that simplifies the process of serializing **any** 
 
 ## Features
 
-- **Automatic Circular Reference Detection**  
+- **Automatic Circular Reference Detection**
   Detects and replaces cyclical structures with `"<circular reference>"` to prevent infinite loops.
-- **Broad Compatibility**  
+- **Broad Compatibility**
   Works seamlessly with dictionaries, lists, custom classes, dataclasses, and Pydantic models (including both `model_dump()` from v2 and `dict()` from v1).
-- **Non-Intrusive Serialization**  
+- **Extended Standard Types Support**
+  Native support for `datetime`, `date`, `time`, `UUID`, `Decimal`, `bytes`, `Enum`, `Path`, `set`, and `frozenset`.
+- **Non-Intrusive Serialization**
   No special inheritance or overrides needed. Uses reflection and standard Python methods (`__dict__`, `asdict()`, `to_dict()`, etc.) where available.
-- **Easy to Integrate**  
+- **Easy to Integrate**
   Just call `obj_to_json()` on your data structure—no additional configuration required.
 
 ### DeepWiki Docs: [https://deepwiki.com/carlosplanchon/pyobjtojson](https://deepwiki.com/carlosplanchon/pyobjtojson)
@@ -118,10 +120,74 @@ obj_to_json(obj)
 }
 ```
 
+### 4. Standard Python Types
+
+**pyobjtojson** now supports many standard Python types out of the box:
+
+```python
+from datetime import datetime, date, time
+from decimal import Decimal
+from enum import Enum
+from pathlib import Path
+from uuid import UUID
+from pyobjtojson import obj_to_json
+
+class Status(Enum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+
+data = {
+    "timestamp": datetime(2024, 1, 15, 10, 30, 45),
+    "date": date(2024, 1, 15),
+    "time": time(14, 30, 0),
+    "id": UUID("12345678-1234-5678-1234-567812345678"),
+    "price": Decimal("99.99"),
+    "binary": b"Hello",
+    "status": Status.ACTIVE,
+    "path": Path("/home/user/file.txt"),
+    "tags": {"python", "json", "api"}
+}
+
+obj_to_json(data)
+```
+
+**Output**:
+```json
+{
+  "timestamp": "2024-01-15T10:30:45",
+  "date": "2024-01-15",
+  "time": "14:30:00",
+  "id": "12345678-1234-5678-1234-567812345678",
+  "price": 99.99,
+  "binary": "SGVsbG8=",
+  "status": "active",
+  "path": "/home/user/file.txt",
+  "tags": ["api", "json", "python"]
+}
+```
+
+**Supported Standard Types:**
+- **datetime, date, time** → ISO format strings
+- **UUID** → string representation
+- **Decimal** → float (default) or string (with `decimal_as_float=False`)
+- **bytes, bytearray** → base64 encoded strings
+- **Enum** → underlying value
+- **Path** → string representation
+- **set, frozenset** → sorted lists
+
 ## API Reference
 
-- **`obj_to_json(obj) -> dict | list | Any`**  
-  Returns a cycle-free structure (nested dictionaries/lists) that is JSON-serializable.
+### `obj_to_json(obj, check_circular=True, decimal_as_float=True)`
+
+Returns a cycle-free structure (nested dictionaries/lists) that is JSON-serializable.
+
+**Parameters:**
+- `obj` (Any): The object to serialize to JSON-like structures.
+- `check_circular` (bool, optional): If True (default), detect and mark circular references as `"<circular reference>"`.
+- `decimal_as_float` (bool, optional): If True (default), convert `Decimal` to `float`. If False, convert to string for high precision.
+
+**Returns:**
+- `dict | list | Any`: A JSON-serializable structure.
 
 ## Contributing
 Contributions, bug reports, and feature requests are welcome! Feel free to open an issue or submit a pull request.
