@@ -15,10 +15,10 @@ A lightweight Python library that simplifies the process of serializing **any** 
 
 ### DeepWiki Docs: [https://deepwiki.com/carlosplanchon/pyobjtojson](https://deepwiki.com/carlosplanchon/pyobjtojson)
 
-## Installation
+## Installation with uv:
 
 ```bash
-pip install pyobjtojson
+uv add pyobjtojson
 ```
 
 ## Quickstart
