@@ -1,4 +1,4 @@
-![pyobjtojson banner](https://raw.githubusercontent.com/carlosplanchon/pyobjtojson/refs/heads/main/assets/banner.jpeg)
+![pyobjtojson banner](https://raw.githubusercontent.com/carlosplanchon/pyobjtojson/refs/heads/main/assets/banner_color.jpeg)
 
 # pyobjtojson
 
