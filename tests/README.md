@@ -61,6 +61,18 @@ pytest -v
 pytest -s
 ```
 
+### Run type checking with mypy
+
+```bash
+mypy pyobjtojson/__init__.py
+```
+
+Or use the convenience script:
+
+```bash
+./check_types.sh
+```
+
 ## Test Coverage
 
 The test suite aims for comprehensive coverage including:

@@ -10,6 +10,8 @@ A lightweight Python library that simplifies the process of serializing **any** 
   Works seamlessly with dictionaries, lists, custom classes, dataclasses, and Pydantic models (including both `model_dump()` from v2 and `dict()` from v1).
 - **Extended Standard Types Support**
   Native support for `datetime`, `date`, `time`, `UUID`, `Decimal`, `bytes`, `Enum`, `Path`, `set`, and `frozenset`.
+- **Full Type Hints Support**
+  Complete type annotations for better IDE autocomplete, type checking with mypy, and improved code documentation.
 - **Non-Intrusive Serialization**
   No special inheritance or overrides needed. Uses reflection and standard Python methods (`__dict__`, `asdict()`, `to_dict()`, etc.) where available.
 - **Easy to Integrate**
@@ -188,6 +190,33 @@ Returns a cycle-free structure (nested dictionaries/lists) that is JSON-serializ
 
 **Returns:**
 - `dict | list | Any`: A JSON-serializable structure.
+
+## Type Hints
+
+**pyobjtojson** is fully typed and passes strict mypy checking. This provides:
+
+- **Better IDE Support**: Autocomplete and inline documentation
+- **Type Safety**: Catch errors before runtime with mypy
+- **Clear API**: Type annotations serve as documentation
+
+```python
+from typing import Any
+from pyobjtojson import obj_to_json
+
+# Your IDE will provide autocomplete and type checking
+def serialize_data(data: dict[str, Any]) -> Any:
+    return obj_to_json(
+        data,
+        check_circular=True,    # bool
+        decimal_as_float=False  # bool
+    )
+```
+
+To check types in your project:
+
+```bash
+mypy your_code.py
+```
 
 ## Contributing
 Contributions, bug reports, and feature requests are welcome! Feel free to open an issue or submit a pull request.

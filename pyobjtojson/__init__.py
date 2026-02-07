@@ -7,10 +7,17 @@ from datetime import datetime, date, time
 from decimal import Decimal
 from enum import Enum
 from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 
-def _serialize_for_json(obj, visited, check_circular=True, _skip_circular_check=False, decimal_as_float=True):
+def _serialize_for_json(
+    obj: Any,
+    visited: set[int],
+    check_circular: bool = True,
+    _skip_circular_check: bool = False,
+    decimal_as_float: bool = True
+) -> Any:
     """
     Internal recursion logic that can handle circular references
     using `visited`. This includes careful exception handling so
@@ -83,23 +90,23 @@ def _serialize_for_json(obj, visited, check_circular=True, _skip_circular_check=
     # Handle Mapping (like dict). Build a new dict item by item,
     # catching errors.
     if isinstance(obj, Mapping):
-        result = {}
+        result_dict: dict[Any, Any] = {}
         for key, value in obj.items():
             try:
-                result[key] = _serialize_for_json(
+                result_dict[key] = _serialize_for_json(
                     value, visited, check_circular=check_circular,
                     decimal_as_float=decimal_as_float
                 )
             except Exception as exc:
-                result[key] = f"<serialization error: {exc}>"
-        return result
+                result_dict[key] = f"<serialization error: {exc}>"
+        return result_dict
 
     # Handle Sequence (like list/tuple), but not string.
     if isinstance(obj, Sequence) and not isinstance(obj, str):
-        result = []
+        result_list: list[Any] = []
         for index, item in enumerate(obj):
             try:
-                result.append(
+                result_list.append(
                     _serialize_for_json(
                         obj=item,
                         visited=visited,
@@ -108,8 +115,8 @@ def _serialize_for_json(obj, visited, check_circular=True, _skip_circular_check=
                     )
                 )
             except Exception as exc:
-                result.append(f"<serialization error at index {index}: {exc}>")
-        return result
+                result_list.append(f"<serialization error at index {index}: {exc}>")
+        return result_list
 
     # Try Pydantic v2 model_dump(), but fall back if it fails
     if hasattr(obj, "model_dump") and callable(obj.model_dump):
@@ -147,7 +154,9 @@ def _serialize_for_json(obj, visited, check_circular=True, _skip_circular_check=
     # If it's a dataclass, convert it using asdict(), but handle exceptions
     if dataclasses.is_dataclass(obj):
         try:
-            dc_data = dataclasses.asdict(obj)
+            # is_dataclass can return True for both instances and types,
+            # but we only process instances here
+            dc_data = dataclasses.asdict(obj)  # type: ignore[arg-type]
             # Skip circular check for the intermediate dict
             return _serialize_for_json(
                 obj=dc_data,
@@ -200,7 +209,11 @@ def _serialize_for_json(obj, visited, check_circular=True, _skip_circular_check=
         return f"<serialization error: {exc}>"
 
 
-def obj_to_json(obj, check_circular=True, decimal_as_float=True):
+def obj_to_json(
+    obj: Any,
+    check_circular: bool = True,
+    decimal_as_float: bool = True
+) -> Any:
     """
     Public-facing function that starts with a fresh visited set
     to handle cycles (if `check_circular=True`). Calls the internal
@@ -219,8 +232,9 @@ def obj_to_json(obj, check_circular=True, decimal_as_float=True):
     :param check_circular: If True, detect and mark circular references.
     :param decimal_as_float: If True, convert Decimal to float; otherwise to string.
                              Default is True.
+    :return: A JSON-serializable structure (dict, list, str, int, float, bool, None).
     """
-    visited = set()
+    visited: set[int] = set()
     return _serialize_for_json(
         obj=obj,
         visited=visited,
