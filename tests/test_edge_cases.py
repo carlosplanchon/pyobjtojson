@@ -122,16 +122,70 @@ class TestEdgeCases:
         assert result == obj
 
     def test_dict_with_non_string_keys(self):
-        """Test dict with non-string keys (should work as-is)."""
+        """Non-string keys must yield a json.dumps-compatible structure.
+
+        int/float/bool/None keys are kept as-is (json.dumps coerces them to
+        strings itself); other keys are stringified so the result never breaks
+        json.dumps.
+        """
         obj = {
             1: "one",
             2: "two",
             (3, 4): "tuple key"
         }
         result = obj_to_json(obj)
+
+        # Primitive keys pass through unchanged.
         assert result[1] == "one"
         assert result[2] == "two"
-        assert result[(3, 4)] == "tuple key"
+        # The tuple key is no longer a valid JSON key, so it is stringified.
+        assert (3, 4) not in result
+        assert result["[3, 4]"] == "tuple key"
+
+    def test_output_with_non_string_keys_is_json_dumpable(self):
+        """The whole point of the fix: json.dumps must not raise."""
+        import json
+
+        obj = {(1, 2): "x", frozenset({9}): "y", 5: "z"}
+        result = obj_to_json(obj)
+
+        # Must not raise TypeError: keys must be str, int, float, bool or None.
+        json.dumps(result)
+
+    def test_typed_keys_are_serialized(self):
+        """Common typed keys become their natural scalar string form."""
+        from uuid import UUID
+        from datetime import datetime, date
+        from enum import Enum
+        from pathlib import Path
+
+        class Color(Enum):
+            RED = "red"
+
+        obj = {
+            UUID(int=0): "uuid",
+            datetime(2024, 1, 15, 10, 30): "dt",
+            date(2024, 1, 15): "date",
+            Color.RED: "enum",
+            Path("/tmp/x"): "path",
+        }
+        result = obj_to_json(obj)
+
+        assert result["00000000-0000-0000-0000-000000000000"] == "uuid"
+        assert result["2024-01-15T10:30:00"] == "dt"
+        assert result["2024-01-15"] == "date"
+        assert result["red"] == "enum"
+        assert result["/tmp/x"] == "path"
+
+    def test_decimal_key_respects_decimal_as_float(self):
+        """Decimal keys follow the same decimal_as_float option as values."""
+        from decimal import Decimal
+
+        as_float = obj_to_json({Decimal("9.99"): "v"})
+        assert as_float[9.99] == "v"
+
+        as_str = obj_to_json({Decimal("9.99"): "v"}, decimal_as_float=False)
+        assert as_str["9.99"] == "v"
 
     def test_broken_str_method(self):
         """Test object with broken __str__ method."""

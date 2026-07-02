@@ -12,6 +12,8 @@ A lightweight Python library that simplifies the process of serializing **any** 
   Works seamlessly with dictionaries, lists, custom classes, dataclasses, and Pydantic models (including both `model_dump()` from v2 and `dict()` from v1).
 - **Extended Standard Types Support**
   Native support for `datetime`, `date`, `time`, `UUID`, `Decimal`, `bytes`, `Enum`, `Path`, `set`, and `frozenset`.
+- **JSON-Safe Dictionary Keys**
+  Non-string keys (`UUID`, `datetime`, `Enum`, tuples, and other objects) are converted so the returned structure always survives `json.dumps`.
 - **Full Type Hints Support**
   Complete type annotations for better IDE autocomplete, type checking with mypy, and improved code documentation.
 - **Non-Intrusive Serialization**
@@ -41,7 +43,12 @@ data = {
     "nested": {"inner_key": "inner_value"}
 }
 
-json_obj = obj_to_json(data)  # Using json.dumps kwargs
+# obj_to_json returns a JSON-serializable structure (nested dicts, lists and
+# primitives), not a JSON string. Pass it to json.dumps() when you need text:
+json_obj = obj_to_json(data)
+
+import json
+json_text = json.dumps(json_obj)
 ```
 
 **Output** (example):
@@ -178,6 +185,44 @@ obj_to_json(data)
 - **Enum** → underlying value
 - **Path** → string representation
 - **set, frozenset** → sorted lists
+
+### 5. Dictionary Keys
+
+JSON object keys must be strings, so **pyobjtojson** normalizes non-string keys
+to keep the result compatible with `json.dumps`:
+
+- `str`, `int`, `float`, `bool`, and `None` keys are kept as-is (`json.dumps`
+  already coerces the non-string primitives to strings itself).
+- Typed keys such as `UUID`, `datetime`, `Enum`, `Decimal`, and `Path` are
+  converted to their natural scalar form (e.g. `UUID` → string, `datetime` →
+  ISO string), respecting `decimal_as_float`.
+- Any remaining composite key (a tuple, `frozenset`, or custom object) is
+  stringified as a last resort.
+
+```python
+from uuid import UUID
+from pyobjtojson import obj_to_json
+
+data = {
+    UUID("12345678-1234-5678-1234-567812345678"): "by uuid",
+    (1, 2): "by tuple",
+    42: "by int",
+}
+
+obj_to_json(data)
+```
+
+**Output**:
+```json
+{
+  "12345678-1234-5678-1234-567812345678": "by uuid",
+  "[1, 2]": "by tuple",
+  "42": "by int"
+}
+```
+
+> **Note:** If two distinct keys normalize to the same string, the last one
+> wins — this mirrors how JSON itself collapses duplicate keys.
 
 ## API Reference
 

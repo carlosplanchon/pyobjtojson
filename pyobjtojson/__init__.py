@@ -80,133 +80,204 @@ def _serialize_for_json(
 
     obj_id = id(obj)
 
-    # If circular checking is enabled, see if we've already
-    # visited this object.
+    # If circular checking is enabled, see if this object is already on the
+    # current traversal path. We track whether *this* frame added the id so we
+    # can remove it again on the way out (see the `finally` below). Keeping
+    # `visited` as the active path — rather than every object ever seen — is
+    # what makes this real cycle detection: a shared sub-object referenced from
+    # two sibling branches (a DAG, not a cycle) must not be flagged circular.
+    added_to_visited = False
     if check_circular is True and not _skip_circular_check:
         if obj_id in visited:
             return "<circular reference>"
         visited.add(obj_id)
+        added_to_visited = True
 
-    # Handle Mapping (like dict). Build a new dict item by item,
-    # catching errors.
-    if isinstance(obj, Mapping):
-        result_dict: dict[Any, Any] = {}
-        for key, value in obj.items():
-            try:
-                result_dict[key] = _serialize_for_json(
-                    value, visited, check_circular=check_circular,
+    try:
+        # Handle Mapping (like dict). Build a new dict item by item,
+        # catching errors.
+        if isinstance(obj, Mapping):
+            result_dict: dict[Any, Any] = {}
+            for key, value in obj.items():
+                # Keys must also be JSON-compatible, otherwise json.dumps would
+                # reject the returned structure even though the values are fine.
+                json_key = _serialize_key(
+                    key, visited, check_circular=check_circular,
                     decimal_as_float=decimal_as_float
                 )
-            except Exception as exc:
-                result_dict[key] = f"<serialization error: {exc}>"
-        return result_dict
-
-    # Handle Sequence (like list/tuple), but not string.
-    if isinstance(obj, Sequence) and not isinstance(obj, str):
-        result_list: list[Any] = []
-        for index, item in enumerate(obj):
-            try:
-                result_list.append(
-                    _serialize_for_json(
-                        obj=item,
-                        visited=visited,
-                        check_circular=check_circular,
+                try:
+                    result_dict[json_key] = _serialize_for_json(
+                        value, visited, check_circular=check_circular,
                         decimal_as_float=decimal_as_float
                     )
+                except Exception as exc:
+                    result_dict[json_key] = f"<serialization error: {exc}>"
+            return result_dict
+
+        # Handle Sequence (like list/tuple), but not string.
+        if isinstance(obj, Sequence) and not isinstance(obj, str):
+            result_list: list[Any] = []
+            for index, item in enumerate(obj):
+                try:
+                    result_list.append(
+                        _serialize_for_json(
+                            obj=item,
+                            visited=visited,
+                            check_circular=check_circular,
+                            decimal_as_float=decimal_as_float
+                        )
+                    )
+                except Exception as exc:
+                    result_list.append(f"<serialization error at index {index}: {exc}>")
+            return result_list
+
+        # Try Pydantic v2 model_dump(), but fall back if it fails
+        if hasattr(obj, "model_dump") and callable(obj.model_dump):
+            try:
+                model_data = obj.model_dump()
+                # Skip re-adding the intermediate dict to `visited`; this object
+                # is already on the path, so its converted form must not be
+                # treated as a separate node.
+                return _serialize_for_json(
+                    obj=model_data,
+                    visited=visited,
+                    check_circular=check_circular,
+                    _skip_circular_check=True,
+                    decimal_as_float=decimal_as_float
                 )
-            except Exception as exc:
-                result_list.append(f"<serialization error at index {index}: {exc}>")
-        return result_list
+            except Exception:
+                # Fall through to next check if this fails
+                ...
 
-    # Try Pydantic v2 model_dump(), but fall back if it fails
-    if hasattr(obj, "model_dump") and callable(obj.model_dump):
+        # Try Pydantic v1 .dict(), but fall back if it fails
+        if hasattr(obj, "dict") and callable(obj.dict):
+            try:
+                dict_data = obj.dict()
+                # Skip circular check for the intermediate dict
+                return _serialize_for_json(
+                    obj=dict_data,
+                    visited=visited,
+                    check_circular=check_circular,
+                    _skip_circular_check=True,
+                    decimal_as_float=decimal_as_float
+                )
+            except Exception:
+                # Fall through to next check if this fails
+                ...
+
+        # If it's a dataclass, convert it using asdict(), but handle exceptions
+        if dataclasses.is_dataclass(obj):
+            try:
+                # is_dataclass can return True for both instances and types,
+                # but we only process instances here
+                dc_data = dataclasses.asdict(obj)  # type: ignore[arg-type]
+                # Skip circular check for the intermediate dict
+                return _serialize_for_json(
+                    obj=dc_data,
+                    visited=visited,
+                    check_circular=check_circular,
+                    _skip_circular_check=True,
+                    decimal_as_float=decimal_as_float
+                )
+            except Exception:
+                # Fall through to next check if this fails
+                ...
+
+        # If there's a custom .to_dict() method, try that
+        if hasattr(obj, "to_dict") and callable(obj.to_dict):
+            try:
+                custom_dict_data = obj.to_dict()
+                # Skip circular check for the intermediate dict
+                return _serialize_for_json(
+                    obj=custom_dict_data,
+                    visited=visited,
+                    check_circular=check_circular,
+                    _skip_circular_check=True,
+                    decimal_as_float=decimal_as_float
+                )
+            except Exception:
+                # Fall through to next check if this fails
+                ...
+
+        # If the object has a __dict__, recurse into that
+        if hasattr(obj, "__dict__"):
+            try:
+                # Skip circular check for the __dict__ to avoid false positives
+                return _serialize_for_json(
+                    obj=obj.__dict__,
+                    visited=visited,
+                    check_circular=check_circular,
+                    _skip_circular_check=True,
+                    decimal_as_float=decimal_as_float
+                )
+            except Exception:
+                # Fall through to next check if this fails
+                pass
+
+        # Last resort: convert to string, but even this can fail
+        # if __str__ is broken
         try:
-            model_data = obj.model_dump()
-            # Skip circular check for the intermediate dict to avoid false positives
-            # when Python reuses memory addresses
-            return _serialize_for_json(
-                obj=model_data,
-                visited=visited,
-                check_circular=check_circular,
-                _skip_circular_check=True,
-                decimal_as_float=decimal_as_float
-            )
-        except Exception:
-            # Fall through to next check if this fails
-            ...
+            return str(obj)
+        except Exception as exc:
+            # If that fails, return a generic serialization error.
+            return f"<serialization error: {exc}>"
+    finally:
+        # Leave the traversal path: this object is no longer an ancestor of
+        # whatever we serialize next, so remove it to allow legitimate reuse
+        # of the same instance elsewhere in the tree.
+        if added_to_visited:
+            visited.discard(obj_id)
 
-    # Try Pydantic v1 .dict(), but fall back if it fails
-    if hasattr(obj, "dict") and callable(obj.dict):
-        try:
-            dict_data = obj.dict()
-            # Skip circular check for the intermediate dict
-            return _serialize_for_json(
-                obj=dict_data,
-                visited=visited,
-                check_circular=check_circular,
-                _skip_circular_check=True,
-                decimal_as_float=decimal_as_float
-            )
-        except Exception:
-            # Fall through to next check if this fails
-            ...
 
-    # If it's a dataclass, convert it using asdict(), but handle exceptions
-    if dataclasses.is_dataclass(obj):
-        try:
-            # is_dataclass can return True for both instances and types,
-            # but we only process instances here
-            dc_data = dataclasses.asdict(obj)  # type: ignore[arg-type]
-            # Skip circular check for the intermediate dict
-            return _serialize_for_json(
-                obj=dc_data,
-                visited=visited,
-                check_circular=check_circular,
-                _skip_circular_check=True,
-                decimal_as_float=decimal_as_float
-            )
-        except Exception:
-            # Fall through to next check if this fails
-            ...
+def _serialize_key(
+    key: Any,
+    visited: set[int],
+    check_circular: bool = True,
+    decimal_as_float: bool = True
+) -> Any:
+    """
+    Convert a mapping key into something ``json.dumps`` accepts as an object
+    key: ``str``, ``int``, ``float``, ``bool`` or ``None``.
 
-    # If there's a custom .to_dict() method, try that
-    if hasattr(obj, "to_dict") and callable(obj.to_dict):
-        try:
-            custom_dict_data = obj.to_dict()
-            # Skip circular check for the intermediate dict
-            return _serialize_for_json(
-                obj=custom_dict_data,
-                visited=visited,
-                check_circular=check_circular,
-                _skip_circular_check=True,
-                decimal_as_float=decimal_as_float
-            )
-        except Exception:
-            # Fall through to next check if this fails
-            ...
+    ``json.dumps`` already coerces int/float/bool/None keys to strings itself,
+    so those (and plain strings) pass through unchanged. Any other key is run
+    through the normal value serializer so that common non-string keys become
+    their natural scalar form (``UUID`` → str, ``datetime`` → ISO string,
+    ``Enum`` → its value, ``Decimal`` → float/str). If the result is still a
+    composite (e.g. a tuple serialized to a list), it is stringified as a last
+    resort so the returned structure always survives ``json.dumps``.
 
-    # If the object has a __dict__, recurse into that
-    if hasattr(obj, "__dict__"):
-        try:
-            # Skip circular check for the __dict__ to avoid false positives
-            return _serialize_for_json(
-                obj=obj.__dict__,
-                visited=visited,
-                check_circular=check_circular,
-                _skip_circular_check=True,
-                decimal_as_float=decimal_as_float
-            )
-        except Exception:
-            # Fall through to next check if this fails
-            pass
+    :param key: The mapping key to serialize.
+    :param visited: The traversal-path set shared with the value serializer.
+    :param check_circular: Whether cycle detection is enabled.
+    :param decimal_as_float: If True, convert Decimal to float; otherwise string.
+    :return: A ``json.dumps``-compatible key.
+    """
+    # json.dumps natively accepts these as object keys, so leave them as-is to
+    # preserve its default behavior (e.g. int key 1 -> "1").
+    if key is None or isinstance(key, (str, bool, int, float)):
+        return key
 
-    # Last resort: convert to string, but even this can fail
-    # if __str__ is broken
+    # Reuse the value machinery so typed keys become their natural scalar form.
     try:
-        return str(obj)
+        serialized = _serialize_for_json(
+            obj=key,
+            visited=visited,
+            check_circular=check_circular,
+            decimal_as_float=decimal_as_float
+        )
     except Exception as exc:
-        # If that fails, return a generic serialization error.
-        return f"<serialization error: {exc}>"
+        return f"<unserializable key: {exc}>"
+
+    if serialized is None or isinstance(serialized, (str, bool, int, float)):
+        return serialized
+
+    # Composite results (lists/dicts from e.g. a tuple or a custom object)
+    # can't be object keys; fall back to a string form.
+    try:
+        return str(serialized)
+    except Exception as exc:
+        return f"<unserializable key: {exc}>"
 
 
 def obj_to_json(

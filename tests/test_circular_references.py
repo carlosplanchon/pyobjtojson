@@ -87,7 +87,8 @@ class TestCircularReferences:
         assert result["next"]["next"]["next"]["next"] == "<circular reference>"
 
     def test_multiple_references_same_object(self):
-        """Test that same object referenced multiple times (not circular)."""
+        """Same object referenced several times in sibling branches is a DAG,
+        not a cycle, and every reference must be serialized in full."""
         shared = {"shared": "data"}
         container = {
             "ref1": shared,
@@ -97,8 +98,43 @@ class TestCircularReferences:
 
         result = obj_to_json(container, check_circular=True)
 
-        # First reference should be serialized normally
-        assert result["ref1"]["shared"] == "data"
-        # Subsequent references to the same object are marked as circular
-        assert result["ref2"] == "<circular reference>"
-        assert result["ref3"] == "<circular reference>"
+        # None of these is a cycle: the shared object is not an ancestor of
+        # itself, so each reference is serialized normally.
+        assert result["ref1"] == {"shared": "data"}
+        assert result["ref2"] == {"shared": "data"}
+        assert result["ref3"] == {"shared": "data"}
+
+    def test_shared_object_in_list(self):
+        """The same instance repeated in a list is not circular."""
+        item = {"n": 1}
+
+        result = obj_to_json([item, item, item], check_circular=True)
+
+        assert result == [{"n": 1}, {"n": 1}, {"n": 1}]
+
+    def test_diamond_shared_reference(self):
+        """A diamond-shaped DAG (shared node reached by two paths) is not a
+        cycle and must be fully serialized on every path."""
+        shared = {"x": 1}
+        container = {
+            "left": shared,
+            "right": {"nested": shared},
+        }
+
+        result = obj_to_json(container, check_circular=True)
+
+        assert result["left"] == {"x": 1}
+        assert result["right"]["nested"] == {"x": 1}
+
+    def test_sibling_reuse_is_not_flagged_but_cycle_is(self):
+        """Reusing an object across siblings is fine; a genuine back-reference
+        into an ancestor is still detected."""
+        shared = {"v": 1}
+        node = {"a": shared, "b": shared}
+        node["self"] = node  # real cycle back into an ancestor
+
+        result = obj_to_json(node, check_circular=True)
+
+        assert result["a"] == {"v": 1}
+        assert result["b"] == {"v": 1}
+        assert result["self"] == "<circular reference>"
