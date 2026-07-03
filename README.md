@@ -19,7 +19,7 @@ A lightweight Python library that simplifies the process of serializing **any** 
 - **Non-Intrusive Serialization**
   No special inheritance or overrides needed. Uses reflection and standard Python methods (`__dict__`, `asdict()`, `to_dict()`, etc.) where available.
 - **Easy to Integrate**
-  Just call `obj_to_json()` on your data structure—no additional configuration required.
+  Just call `obj_to_json()` on your data structure. No additional configuration required.
 
 ### DeepWiki Docs: [https://deepwiki.com/carlosplanchon/pyobjtojson](https://deepwiki.com/carlosplanchon/pyobjtojson)
 
@@ -222,7 +222,7 @@ obj_to_json(data)
 ```
 
 > **Note:** If two distinct keys normalize to the same string, the last one
-> wins — this mirrors how JSON itself collapses duplicate keys.
+> wins. This mirrors how JSON itself collapses duplicate keys.
 
 ## API Reference
 
