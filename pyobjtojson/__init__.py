@@ -99,7 +99,7 @@ def _serialize_for_json(
              converted more structurally.
     """
 
-    # Enum → underlying value. This must run before the primitive fast-path
+    # Enum -> underlying value. This must run before the primitive fast-path
     # below: IntEnum/StrEnum members are also int/str instances, so the
     # fast-path would otherwise return the enum member itself instead of its
     # documented `.value`. The value is re-serialized rather than returned
@@ -127,7 +127,7 @@ def _serialize_for_json(
 
     # === Standard Python types support ===
 
-    # datetime, date, time → ISO format
+    # datetime, date, time -> ISO format
     if isinstance(obj, datetime):
         return obj.isoformat()
     if isinstance(obj, date):
@@ -135,11 +135,11 @@ def _serialize_for_json(
     if isinstance(obj, time):
         return obj.isoformat()
 
-    # UUID → string
+    # UUID -> string
     if isinstance(obj, UUID):
         return str(obj)
 
-    # Decimal → float or string
+    # Decimal -> float or string
     if isinstance(obj, Decimal):
         if decimal_as_float:
             # A Decimal can be non-finite. NaN must be detected on the Decimal
@@ -163,11 +163,11 @@ def _serialize_for_json(
             return as_float
         return str(obj)
 
-    # bytes, bytearray → base64
+    # bytes, bytearray -> base64
     if isinstance(obj, (bytes, bytearray)):
         return base64.b64encode(bytes(obj)).decode('utf-8')
 
-    # Path → string
+    # Path -> string
     if isinstance(obj, Path):
         return str(obj)
 
@@ -277,7 +277,7 @@ def _serialize_container(
                 result_list.append(f"<serialization error at index {index}: {exc}>")
         return result_list
 
-    # set, frozenset → list. Sort first, while the raw elements are still
+    # set, frozenset -> list. Sort first, while the raw elements are still
     # comparable, so the output stays deterministic; then serialize each
     # element like any other value so sets get the same conversions and
     # policies (datetime, Decimal, Enum, non_finite, ...) as lists do.
@@ -379,8 +379,8 @@ def _serialize_key(
     ``json.dumps`` already coerces int/float/bool/None keys to strings itself,
     so those (and plain strings) pass through unchanged. Any other key is run
     through the normal value serializer so that common non-string keys become
-    their natural scalar form (``UUID`` → str, ``datetime`` → ISO string,
-    ``Enum`` → its value, ``Decimal`` → float/str). If the result is still a
+    their natural scalar form (``UUID`` -> str, ``datetime`` -> ISO string,
+    ``Enum`` -> its value, ``Decimal`` -> float/str). If the result is still a
     composite (e.g. a tuple serialized to a list), it is stringified as a last
     resort so the returned structure always survives ``json.dumps``.
 

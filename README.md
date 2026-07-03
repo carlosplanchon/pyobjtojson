@@ -183,13 +183,13 @@ obj_to_json(data)
 ```
 
 **Supported Standard Types:**
-- **datetime, date, time** → ISO format strings
-- **UUID** → string representation
-- **Decimal** → float (default) or string (with `decimal_as_float=False`)
-- **bytes, bytearray** → base64 encoded strings
-- **Enum** → underlying value
-- **Path** → string representation
-- **set, frozenset** → sorted lists
+- **datetime, date, time** -> ISO format strings
+- **UUID** -> string representation
+- **Decimal** -> float (default) or string (with `decimal_as_float=False`)
+- **bytes, bytearray** -> base64 encoded strings
+- **Enum** -> underlying value
+- **Path** -> string representation
+- **set, frozenset** -> sorted lists
 
 ### 5. Dictionary Keys
 
@@ -201,7 +201,7 @@ to keep the result compatible with `json.dumps`:
   is a non-finite float key (`inf`, `-inf`, `nan`), which follows the
   `non_finite` policy like any other non-finite float.
 - Typed keys such as `UUID`, `datetime`, `Enum`, `Decimal`, and `Path` are
-  converted to their natural scalar form (e.g. `UUID` → string, `datetime` →
+  converted to their natural scalar form (e.g. `UUID` -> string, `datetime` ->
   ISO string), respecting `decimal_as_float`.
 - Any remaining composite key (a tuple, `frozenset`, or custom object) is
   stringified as a last resort.
