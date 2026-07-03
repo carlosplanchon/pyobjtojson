@@ -3,7 +3,7 @@
 import base64
 import dataclasses
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime, date, time
 from decimal import Decimal
 from enum import Enum
@@ -304,15 +304,47 @@ def _serialize_container(
                 set_items.append(f"<serialization error at index {index}: {exc}>")
         return set_items
 
-    # Try Pydantic v2 model_dump(), but fall back if it fails
-    if hasattr(obj, "model_dump") and callable(obj.model_dump):
+    # Structured objects: try each conversion strategy in order and recurse
+    # into the first one that succeeds. Every strategy yields an intermediate
+    # stand-in for `obj` itself, so the recursion skips re-adding it to the
+    # path (_skip_circular_check=True): the converted form must not be
+    # treated as a separate node. `applies` is a thunk so a strategy's
+    # attributes are only probed once every earlier strategy has been ruled
+    # out, exactly like the if-chain this replaces.
+    converters: tuple[tuple[Callable[[], bool], Callable[[], Any]], ...] = (
+        # Pydantic v2
+        (
+            lambda: callable(getattr(obj, "model_dump", None)),
+            lambda: obj.model_dump(),
+        ),
+        # Pydantic v1
+        (
+            lambda: callable(getattr(obj, "dict", None)),
+            lambda: obj.dict(),
+        ),
+        # Dataclass instances (is_dataclass is also True for the class
+        # itself; asdict then raises and falls through to the next strategy)
+        (
+            lambda: dataclasses.is_dataclass(obj),
+            lambda: dataclasses.asdict(obj),
+        ),
+        # Custom to_dict()
+        (
+            lambda: callable(getattr(obj, "to_dict", None)),
+            lambda: obj.to_dict(),
+        ),
+        # Plain object namespace
+        (
+            lambda: hasattr(obj, "__dict__"),
+            lambda: obj.__dict__,
+        ),
+    )
+    for applies, convert in converters:
+        if not applies():
+            continue
         try:
-            model_data = obj.model_dump()
-            # Skip re-adding the intermediate dict to the path; this object
-            # is already on the path, so its converted form must not be
-            # treated as a separate node.
             return _serialize_for_json(
-                obj=model_data,
+                obj=convert(),
                 state=state,
                 check_circular=check_circular,
                 _skip_circular_check=True,
@@ -320,77 +352,9 @@ def _serialize_container(
                 non_finite=non_finite
             )
         except Exception:
-            # Fall through to next check if this fails
-            ...
-
-    # Try Pydantic v1 .dict(), but fall back if it fails
-    if hasattr(obj, "dict") and callable(obj.dict):
-        try:
-            dict_data = obj.dict()
-            # Skip circular check for the intermediate dict
-            return _serialize_for_json(
-                obj=dict_data,
-                state=state,
-                check_circular=check_circular,
-                _skip_circular_check=True,
-                decimal_as_float=decimal_as_float,
-                non_finite=non_finite
-            )
-        except Exception:
-            # Fall through to next check if this fails
-            ...
-
-    # If it's a dataclass, convert it using asdict(), but handle exceptions
-    if dataclasses.is_dataclass(obj):
-        try:
-            # is_dataclass can return True for both instances and types,
-            # but we only process instances here
-            dc_data = dataclasses.asdict(obj)  # type: ignore[arg-type]
-            # Skip circular check for the intermediate dict
-            return _serialize_for_json(
-                obj=dc_data,
-                state=state,
-                check_circular=check_circular,
-                _skip_circular_check=True,
-                decimal_as_float=decimal_as_float,
-                non_finite=non_finite
-            )
-        except Exception:
-            # Fall through to next check if this fails
-            ...
-
-    # If there's a custom .to_dict() method, try that
-    if hasattr(obj, "to_dict") and callable(obj.to_dict):
-        try:
-            custom_dict_data = obj.to_dict()
-            # Skip circular check for the intermediate dict
-            return _serialize_for_json(
-                obj=custom_dict_data,
-                state=state,
-                check_circular=check_circular,
-                _skip_circular_check=True,
-                decimal_as_float=decimal_as_float,
-                non_finite=non_finite
-            )
-        except Exception:
-            # Fall through to next check if this fails
-            ...
-
-    # If the object has a __dict__, recurse into that
-    if hasattr(obj, "__dict__"):
-        try:
-            # Skip circular check for the __dict__ to avoid false positives
-            return _serialize_for_json(
-                obj=obj.__dict__,
-                state=state,
-                check_circular=check_circular,
-                _skip_circular_check=True,
-                decimal_as_float=decimal_as_float,
-                non_finite=non_finite
-            )
-        except Exception:
-            # Fall through to next check if this fails
-            pass
+            # Converting or serializing this form failed: fall through to
+            # the next strategy
+            continue
 
     # Last resort: convert to string, but even this can fail
     # if __str__ is broken
