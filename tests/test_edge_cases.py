@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for edge cases and error handling."""
 
+import json
 import pytest
 from pyobjtojson import obj_to_json
 
@@ -238,3 +239,63 @@ class TestEdgeCases:
         }
         result = obj_to_json(obj)
         assert result == obj
+
+
+class TestNonFiniteFloats:
+    """Test the `non_finite` policy for inf/-inf/nan floats."""
+
+    def test_default_is_null(self):
+        """By default non-finite floats become None, producing valid JSON."""
+        result = obj_to_json(
+            {"a": float("inf"), "b": float("-inf"), "c": float("nan")}
+        )
+        assert result == {"a": None, "b": None, "c": None}
+        # The whole point: strict json.dumps must not raise.
+        json.dumps(result, allow_nan=False)
+
+    def test_finite_floats_untouched(self):
+        """Finite floats are never altered by the policy."""
+        obj = {"x": 1.5, "y": -3.0, "z": 0.0}
+        assert obj_to_json(obj) == obj
+
+    def test_string_mode(self):
+        """String mode yields the standard-looking token strings."""
+        result = obj_to_json(
+            {"pos": float("inf"), "neg": float("-inf"), "nan": float("nan")},
+            non_finite="string",
+        )
+        assert result == {"pos": "Infinity", "neg": "-Infinity", "nan": "NaN"}
+        json.dumps(result, allow_nan=False)
+
+    def test_keep_mode_preserves_legacy_behavior(self):
+        """Keep mode returns the floats unchanged (not strict-JSON valid)."""
+        result = obj_to_json({"a": float("inf")}, non_finite="keep")
+        assert result["a"] == float("inf")
+        assert isinstance(result["a"], float)
+
+    def test_non_finite_decimal(self):
+        """Non-finite Decimal values follow the same policy once floated."""
+        from decimal import Decimal
+
+        assert obj_to_json(Decimal("Infinity")) is None
+        assert obj_to_json(Decimal("NaN"), non_finite="string") == "NaN"
+        # With decimal_as_float=False the Decimal is stringified anyway.
+        assert obj_to_json(Decimal("Infinity"), decimal_as_float=False) == "Infinity"
+
+    def test_non_finite_dict_key(self):
+        """A non-finite float used as a dict key follows the policy too."""
+        assert obj_to_json(
+            {float("inf"): "v"}, non_finite="string"
+        ) == {"Infinity": "v"}
+        result = obj_to_json({float("nan"): "v"})  # default null
+        assert result == {None: "v"}
+        json.dumps(result)  # None key becomes "null", still valid JSON
+
+    def test_non_finite_in_list(self):
+        """Non-finite values inside sequences are handled."""
+        assert obj_to_json([1.0, float("nan"), float("inf")]) == [1.0, None, None]
+
+    def test_invalid_mode_raises(self):
+        """An unknown policy is a programming error and raises ValueError."""
+        with pytest.raises(ValueError, match="non_finite must be one of"):
+            obj_to_json({"a": 1}, non_finite="bogus")

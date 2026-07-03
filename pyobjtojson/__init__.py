@@ -2,6 +2,7 @@
 
 import base64
 import dataclasses
+import math
 from collections.abc import Mapping, Sequence
 from datetime import datetime, date, time
 from decimal import Decimal
@@ -11,12 +12,42 @@ from typing import Any
 from uuid import UUID
 
 
+# Allowed policies for representing non-finite floats (inf/-inf/nan).
+_NON_FINITE_MODES = ("null", "string", "keep")
+
+
+def _non_finite_repr(value: float, non_finite: str) -> Any:
+    """
+    Represent a non-finite float (``inf``, ``-inf`` or ``nan``) according to
+    the chosen policy. JSON has no literal for these values, so leaving them
+    as-is yields output that either breaks ``json.dumps(..., allow_nan=False)``
+    or produces the non-standard ``Infinity``/``NaN`` tokens that strict
+    parsers reject.
+
+    - ``"null"``: return ``None`` (matches JavaScript's ``JSON.stringify``).
+    - ``"string"``: return ``"Infinity"``, ``"-Infinity"`` or ``"NaN"``.
+    - ``"keep"``: return the float unchanged (legacy behavior).
+
+    :param value: A non-finite float.
+    :param non_finite: One of the policies above.
+    :return: The chosen JSON-compatible representation.
+    """
+    if non_finite == "null":
+        return None
+    if non_finite == "string":
+        if value != value:  # NaN is the only value not equal to itself
+            return "NaN"
+        return "Infinity" if value > 0 else "-Infinity"
+    return value  # "keep"
+
+
 def _serialize_for_json(
     obj: Any,
     visited: set[int],
     check_circular: bool = True,
     _skip_circular_check: bool = False,
-    decimal_as_float: bool = True
+    decimal_as_float: bool = True,
+    non_finite: str = "null"
 ) -> Any:
     """
     Internal recursion logic that can handle circular references
@@ -29,6 +60,8 @@ def _serialize_for_json(
     :param _skip_circular_check: Internal flag to skip adding intermediate
                                    conversion results to visited set.
     :param decimal_as_float: If True, convert Decimal to float; otherwise to string.
+    :param non_finite: How to represent non-finite floats (inf/-inf/nan):
+                       "null", "string", or "keep".
     :return: A JSON-serializable structure, or a string if it cannot be
              converted more structurally.
     """
@@ -39,6 +72,12 @@ def _serialize_for_json(
     # documented `.value`.
     if isinstance(obj, Enum):
         return obj.value
+
+    # Non-finite floats (inf, -inf, nan) have no JSON representation. Route
+    # them through the chosen policy before the primitive fast-path returns
+    # them verbatim. bool/int are always finite, so only float needs this.
+    if isinstance(obj, float) and not math.isfinite(obj):
+        return _non_finite_repr(obj, non_finite)
 
     # If it's None, bool, int, float, or str, it's already JSON-serializable.
     if obj is None or isinstance(obj, (bool, int, float, str)):
@@ -61,7 +100,12 @@ def _serialize_for_json(
     # Decimal → float or string
     if isinstance(obj, Decimal):
         if decimal_as_float:
-            return float(obj)
+            # A Decimal can also be non-finite (Decimal("inf")/Decimal("nan")),
+            # so apply the same policy once converted to float.
+            as_float = float(obj)
+            if not math.isfinite(as_float):
+                return _non_finite_repr(as_float, non_finite)
+            return as_float
         return str(obj)
 
     # bytes, bytearray → base64
@@ -86,9 +130,9 @@ def _serialize_for_json(
     # If circular checking is enabled, see if this object is already on the
     # current traversal path. We track whether *this* frame added the id so we
     # can remove it again on the way out (see the `finally` below). Keeping
-    # `visited` as the active path — rather than every object ever seen — is
-    # what makes this real cycle detection: a shared sub-object referenced from
-    # two sibling branches (a DAG, not a cycle) must not be flagged circular.
+    # `visited` as the active path (not every object ever seen) is what makes
+    # this real cycle detection: a shared sub-object referenced from two
+    # sibling branches (a DAG, not a cycle) must not be flagged circular.
     added_to_visited = False
     if check_circular is True and not _skip_circular_check:
         if obj_id in visited:
@@ -106,12 +150,12 @@ def _serialize_for_json(
                 # reject the returned structure even though the values are fine.
                 json_key = _serialize_key(
                     key, visited, check_circular=check_circular,
-                    decimal_as_float=decimal_as_float
+                    decimal_as_float=decimal_as_float, non_finite=non_finite
                 )
                 try:
                     result_dict[json_key] = _serialize_for_json(
                         value, visited, check_circular=check_circular,
-                        decimal_as_float=decimal_as_float
+                        decimal_as_float=decimal_as_float, non_finite=non_finite
                     )
                 except Exception as exc:
                     result_dict[json_key] = f"<serialization error: {exc}>"
@@ -127,7 +171,8 @@ def _serialize_for_json(
                             obj=item,
                             visited=visited,
                             check_circular=check_circular,
-                            decimal_as_float=decimal_as_float
+                            decimal_as_float=decimal_as_float,
+                            non_finite=non_finite
                         )
                     )
                 except Exception as exc:
@@ -146,7 +191,8 @@ def _serialize_for_json(
                     visited=visited,
                     check_circular=check_circular,
                     _skip_circular_check=True,
-                    decimal_as_float=decimal_as_float
+                    decimal_as_float=decimal_as_float,
+                    non_finite=non_finite
                 )
             except Exception:
                 # Fall through to next check if this fails
@@ -162,7 +208,8 @@ def _serialize_for_json(
                     visited=visited,
                     check_circular=check_circular,
                     _skip_circular_check=True,
-                    decimal_as_float=decimal_as_float
+                    decimal_as_float=decimal_as_float,
+                    non_finite=non_finite
                 )
             except Exception:
                 # Fall through to next check if this fails
@@ -180,7 +227,8 @@ def _serialize_for_json(
                     visited=visited,
                     check_circular=check_circular,
                     _skip_circular_check=True,
-                    decimal_as_float=decimal_as_float
+                    decimal_as_float=decimal_as_float,
+                    non_finite=non_finite
                 )
             except Exception:
                 # Fall through to next check if this fails
@@ -196,7 +244,8 @@ def _serialize_for_json(
                     visited=visited,
                     check_circular=check_circular,
                     _skip_circular_check=True,
-                    decimal_as_float=decimal_as_float
+                    decimal_as_float=decimal_as_float,
+                    non_finite=non_finite
                 )
             except Exception:
                 # Fall through to next check if this fails
@@ -211,7 +260,8 @@ def _serialize_for_json(
                     visited=visited,
                     check_circular=check_circular,
                     _skip_circular_check=True,
-                    decimal_as_float=decimal_as_float
+                    decimal_as_float=decimal_as_float,
+                    non_finite=non_finite
                 )
             except Exception:
                 # Fall through to next check if this fails
@@ -236,7 +286,8 @@ def _serialize_key(
     key: Any,
     visited: set[int],
     check_circular: bool = True,
-    decimal_as_float: bool = True
+    decimal_as_float: bool = True,
+    non_finite: str = "null"
 ) -> Any:
     """
     Convert a mapping key into something ``json.dumps`` accepts as an object
@@ -254,10 +305,14 @@ def _serialize_key(
     :param visited: The traversal-path set shared with the value serializer.
     :param check_circular: Whether cycle detection is enabled.
     :param decimal_as_float: If True, convert Decimal to float; otherwise string.
+    :param non_finite: Policy for non-finite float keys (see _serialize_for_json).
     :return: A ``json.dumps``-compatible key.
     """
     # json.dumps natively accepts these as object keys, so leave them as-is to
-    # preserve its default behavior (e.g. int key 1 -> "1").
+    # preserve its default behavior (e.g. int key 1 -> "1"). A non-finite float
+    # key is the one exception: it must follow the non_finite policy.
+    if isinstance(key, float) and not math.isfinite(key):
+        return _non_finite_repr(key, non_finite)
     if key is None or isinstance(key, (str, bool, int, float)):
         return key
 
@@ -267,7 +322,8 @@ def _serialize_key(
             obj=key,
             visited=visited,
             check_circular=check_circular,
-            decimal_as_float=decimal_as_float
+            decimal_as_float=decimal_as_float,
+            non_finite=non_finite
         )
     except Exception as exc:
         return f"<unserializable key: {exc}>"
@@ -286,7 +342,8 @@ def _serialize_key(
 def obj_to_json(
     obj: Any,
     check_circular: bool = True,
-    decimal_as_float: bool = True
+    decimal_as_float: bool = True,
+    non_finite: str = "null"
 ) -> Any:
     """
     Public-facing function that starts with a fresh visited set
@@ -306,12 +363,22 @@ def obj_to_json(
     :param check_circular: If True, detect and mark circular references.
     :param decimal_as_float: If True, convert Decimal to float; otherwise to string.
                              Default is True.
+    :param non_finite: How to represent non-finite floats (inf/-inf/nan), which
+                       have no JSON literal. One of:
+                       - "null" (default): convert to None, matching JavaScript.
+                       - "string": convert to "Infinity"/"-Infinity"/"NaN".
+                       - "keep": leave the float as-is (not valid JSON).
     :return: A JSON-serializable structure (dict, list, str, int, float, bool, None).
     """
+    if non_finite not in _NON_FINITE_MODES:
+        raise ValueError(
+            f"non_finite must be one of {_NON_FINITE_MODES}, got {non_finite!r}"
+        )
     visited: set[int] = set()
     return _serialize_for_json(
         obj=obj,
         visited=visited,
         check_circular=check_circular,
-        decimal_as_float=decimal_as_float
+        decimal_as_float=decimal_as_float,
+        non_finite=non_finite
     )

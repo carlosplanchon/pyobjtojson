@@ -226,7 +226,7 @@ obj_to_json(data)
 
 ## API Reference
 
-### `obj_to_json(obj, check_circular=True, decimal_as_float=True)`
+### `obj_to_json(obj, check_circular=True, decimal_as_float=True, non_finite="null")`
 
 Returns a cycle-free structure (nested dictionaries/lists) that is JSON-serializable.
 
@@ -234,9 +234,32 @@ Returns a cycle-free structure (nested dictionaries/lists) that is JSON-serializ
 - `obj` (Any): The object to serialize to JSON-like structures.
 - `check_circular` (bool, optional): If True (default), detect and mark circular references as `"<circular reference>"`.
 - `decimal_as_float` (bool, optional): If True (default), convert `Decimal` to `float`. If False, convert to string for high precision.
+- `non_finite` (str, optional): How to represent non-finite floats (`inf`, `-inf`, `nan`), which have no JSON literal. One of:
+  - `"null"` (default): convert to `None`, matching JavaScript's `JSON.stringify`.
+  - `"string"`: convert to `"Infinity"`, `"-Infinity"`, or `"NaN"`.
+  - `"keep"`: leave the float as-is. Note this is **not** valid JSON and will raise with `json.dumps(..., allow_nan=False)`.
+
+  An unknown value raises `ValueError`.
 
 **Returns:**
 - `dict | list | Any`: A JSON-serializable structure.
+
+#### Non-finite floats
+
+`inf`, `-inf`, and `nan` are valid Python floats but have no representation in
+the JSON spec. Left untouched they break `json.dumps(..., allow_nan=False)` and
+produce the non-standard `Infinity`/`NaN` tokens that strict parsers reject. By
+default **pyobjtojson** converts them to `null` so the output is always valid,
+portable JSON:
+
+```python
+from pyobjtojson import obj_to_json
+
+data = {"ratio": float("inf"), "value": float("nan"), "ok": 1.5}
+
+obj_to_json(data)                      # {"ratio": None, "value": None, "ok": 1.5}
+obj_to_json(data, non_finite="string") # {"ratio": "Infinity", "value": "NaN", "ok": 1.5}
+```
 
 ## Type Hints
 
