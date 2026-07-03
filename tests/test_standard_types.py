@@ -367,6 +367,37 @@ class TestSetTypes:
         result = obj_to_json(data)
         assert result == []
 
+    def test_set_elements_are_serialized(self):
+        """Set elements are converted like any other value, not returned raw."""
+        data = {datetime(2024, 1, 2), datetime(2024, 1, 1)}
+        assert obj_to_json(data) == ["2024-01-01T00:00:00", "2024-01-02T00:00:00"]
+
+        decimals = {Decimal("2.5"), Decimal("1.5")}
+        assert obj_to_json(decimals) == [1.5, 2.5]
+        assert obj_to_json(decimals, decimal_as_float=False) == ["1.5", "2.5"]
+
+        uuids = {
+            UUID("11111111-1111-1111-1111-111111111111"),
+            UUID("22222222-2222-2222-2222-222222222222"),
+        }
+        assert obj_to_json(uuids) == [
+            "11111111-1111-1111-1111-111111111111",
+            "22222222-2222-2222-2222-222222222222",
+        ]
+
+    def test_frozenset_elements_are_serialized(self):
+        """frozenset elements get the same treatment as set elements."""
+        assert obj_to_json(frozenset({Status.ACTIVE})) == ["active"]
+        assert obj_to_json(frozenset({Decimal("9.99")})) == [9.99]
+
+    def test_set_output_is_json_dumpable(self):
+        """The returned structure must survive json.dumps."""
+        data = {
+            "when": {datetime(2024, 1, 1)},
+            "ids": frozenset({UUID(int=1)}),
+        }
+        json.dumps(obj_to_json(data))
+
 
 class TestMixedStandardTypes:
     """Test combinations of standard types."""

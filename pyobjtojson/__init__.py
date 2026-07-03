@@ -158,15 +158,6 @@ def _serialize_for_json(
     if isinstance(obj, Path):
         return str(obj)
 
-    # set, frozenset → list
-    if isinstance(obj, (set, frozenset)):
-        try:
-            # Try to sort if elements are comparable
-            return sorted(list(obj))
-        except TypeError:
-            # If not sortable, convert to list without sorting
-            return list(obj)
-
     obj_id = id(obj)
 
     # If circular checking is enabled, see if this object is already on the
@@ -222,10 +213,10 @@ def _serialize_container(
 ) -> Any:
     """
     Dispatch for container-like and structured objects: mappings, sequences,
-    Pydantic models, dataclasses, objects with to_dict() and plain __dict__
-    objects, with a str() fallback. Called by _serialize_for_json once the
-    scalar fast paths did not match and the object was registered on the
-    traversal path.
+    sets, Pydantic models, dataclasses, objects with to_dict() and plain
+    __dict__ objects, with a str() fallback. Called by _serialize_for_json
+    once the scalar fast paths did not match and the object was registered on
+    the traversal path.
     """
     # Handle Mapping (like dict). Build a new dict item by item,
     # catching errors.
@@ -264,6 +255,33 @@ def _serialize_container(
             except Exception as exc:
                 result_list.append(f"<serialization error at index {index}: {exc}>")
         return result_list
+
+    # set, frozenset → list. Sort first, while the raw elements are still
+    # comparable, so the output stays deterministic; then serialize each
+    # element like any other value so sets get the same conversions and
+    # policies (datetime, Decimal, Enum, non_finite, ...) as lists do.
+    if isinstance(obj, (set, frozenset)):
+        try:
+            # Try to sort if elements are comparable
+            elements = sorted(obj)
+        except TypeError:
+            # If not sortable, convert to list without sorting
+            elements = list(obj)
+        set_items: list[Any] = []
+        for index, item in enumerate(elements):
+            try:
+                set_items.append(
+                    _serialize_for_json(
+                        obj=item,
+                        state=state,
+                        check_circular=check_circular,
+                        decimal_as_float=decimal_as_float,
+                        non_finite=non_finite
+                    )
+                )
+            except Exception as exc:
+                set_items.append(f"<serialization error at index {index}: {exc}>")
+        return set_items
 
     # Try Pydantic v2 model_dump(), but fall back if it fails
     if hasattr(obj, "model_dump") and callable(obj.model_dump):

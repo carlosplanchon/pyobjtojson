@@ -295,6 +295,15 @@ class TestNonFiniteFloats:
         """Non-finite values inside sequences are handled."""
         assert obj_to_json([1.0, float("nan"), float("inf")]) == [1.0, None, None]
 
+    def test_non_finite_in_set(self):
+        """Non-finite floats inside sets follow the policy too."""
+        assert obj_to_json({float("nan")}) == [None]
+        assert obj_to_json({float("inf")}, non_finite="string") == ["Infinity"]
+
+        result = obj_to_json({"s": {float("inf"), 1.0}})
+        assert result["s"] == [1.0, None]  # inf sorts after 1.0, then follows policy
+        json.dumps(result, allow_nan=False)
+
     def test_invalid_mode_raises(self):
         """An unknown policy is a programming error and raises ValueError."""
         with pytest.raises(ValueError, match="non_finite must be one of"):
