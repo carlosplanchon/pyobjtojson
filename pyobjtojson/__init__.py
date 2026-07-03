@@ -8,15 +8,19 @@ from datetime import datetime, date, time
 from decimal import Decimal
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, get_args
 from uuid import UUID
 
 
-# Allowed policies for representing non-finite floats (inf/-inf/nan).
-_NON_FINITE_MODES = ("null", "string", "keep")
+# Policy names for representing non-finite floats (inf/-inf/nan). Exposed as a
+# Literal so callers get IDE completion and static checking while still passing
+# plain strings. `_NON_FINITE_MODES` is derived from it for the runtime guard,
+# keeping a single source of truth.
+NonFinite = Literal["null", "string", "keep"]
+_NON_FINITE_MODES = get_args(NonFinite)
 
 
-def _non_finite_repr(value: float, non_finite: str) -> Any:
+def _non_finite_repr(value: float, non_finite: NonFinite) -> Any:
     """
     Represent a non-finite float (``inf``, ``-inf`` or ``nan``) according to
     the chosen policy. JSON has no literal for these values, so leaving them
@@ -47,7 +51,7 @@ def _serialize_for_json(
     check_circular: bool = True,
     _skip_circular_check: bool = False,
     decimal_as_float: bool = True,
-    non_finite: str = "null"
+    non_finite: NonFinite = "null"
 ) -> Any:
     """
     Internal recursion logic that can handle circular references
@@ -287,7 +291,7 @@ def _serialize_key(
     visited: set[int],
     check_circular: bool = True,
     decimal_as_float: bool = True,
-    non_finite: str = "null"
+    non_finite: NonFinite = "null"
 ) -> Any:
     """
     Convert a mapping key into something ``json.dumps`` accepts as an object
@@ -343,7 +347,7 @@ def obj_to_json(
     obj: Any,
     check_circular: bool = True,
     decimal_as_float: bool = True,
-    non_finite: str = "null"
+    non_finite: NonFinite = "null"
 ) -> Any:
     """
     Public-facing function that starts with a fresh visited set
