@@ -316,6 +316,26 @@ class TestNonFiniteFloats:
         # With decimal_as_float=False the Decimal is stringified anyway.
         assert obj_to_json(Decimal("Infinity"), decimal_as_float=False) == "Infinity"
 
+    def test_finite_decimal_overflowing_float_is_not_lost(self):
+        """A finite Decimal too large for float must not become None.
+
+        float(Decimal("1e500")) overflows to inf, but the value IS finite:
+        applying the non_finite policy would silently destroy real data, so
+        it degrades to its exact string form instead.
+        """
+        from decimal import Decimal
+
+        assert obj_to_json(Decimal("1e500")) == "1E+500"
+        assert obj_to_json(Decimal("-1e500")) == "-1E+500"
+        # The value is finite, so no mode treats it as non-finite.
+        assert obj_to_json(Decimal("1e500"), non_finite="string") == "1E+500"
+        assert obj_to_json(Decimal("1e500"), non_finite="keep") == "1E+500"
+        # Genuinely infinite Decimals still follow the policy.
+        assert obj_to_json(Decimal("Infinity")) is None
+        assert obj_to_json(Decimal("-Infinity"), non_finite="string") == "-Infinity"
+
+        json.dumps(obj_to_json({"big": Decimal("1e500")}), allow_nan=False)
+
     def test_signaling_nan_decimal(self):
         """Decimal("sNaN") must follow the policy, not crash.
 

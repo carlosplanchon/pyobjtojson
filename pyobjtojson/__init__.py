@@ -148,10 +148,18 @@ def _serialize_for_json(
             # before the policy could run. is_nan() covers both NaN and sNaN.
             if obj.is_nan():
                 return _non_finite_repr(float("nan"), non_finite)
-            # Infinities are handled after the (now safe) conversion.
+            if obj.is_infinite():
+                return _non_finite_repr(
+                    -math.inf if obj.is_signed() else math.inf, non_finite
+                )
             as_float = float(obj)
             if not math.isfinite(as_float):
-                return _non_finite_repr(as_float, non_finite)
+                # The Decimal itself is finite but too large for a float
+                # (e.g. Decimal("1e500") overflows to inf). Applying the
+                # non_finite policy would silently destroy a real value, so
+                # degrade to the exact string form instead, as
+                # decimal_as_float=False would.
+                return str(obj)
             return as_float
         return str(obj)
 
