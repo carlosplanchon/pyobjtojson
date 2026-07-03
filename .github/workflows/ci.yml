@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Allows this workflow to be called from other workflows (publish.yml runs
+  # it as a gate before uploading to PyPI, since tag pushes don't match the
+  # branch filters above).
+  workflow_call:
 
 concurrency:
   group: ci-${{ github.ref }}
