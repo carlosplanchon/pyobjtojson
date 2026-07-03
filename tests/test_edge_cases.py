@@ -316,6 +316,27 @@ class TestNonFiniteFloats:
         # With decimal_as_float=False the Decimal is stringified anyway.
         assert obj_to_json(Decimal("Infinity"), decimal_as_float=False) == "Infinity"
 
+    def test_signaling_nan_decimal(self):
+        """Decimal("sNaN") must follow the policy, not crash.
+
+        float(Decimal("sNaN")) raises ValueError, so the NaN check has to run
+        on the Decimal itself before any float conversion.
+        """
+        import math
+        from decimal import Decimal
+
+        assert obj_to_json(Decimal("sNaN")) is None
+        assert obj_to_json(Decimal("sNaN"), non_finite="string") == "NaN"
+        assert obj_to_json({"k": Decimal("sNaN")}) == {"k": None}
+        # (an sNaN can never appear as a dict KEY: Python itself refuses to
+        # hash it, so {Decimal("sNaN"): ...} is unconstructible)
+
+        kept = obj_to_json(Decimal("sNaN"), non_finite="keep")
+        assert isinstance(kept, float) and math.isnan(kept)
+
+        # decimal_as_float=False stringifies it like any other Decimal.
+        assert obj_to_json(Decimal("sNaN"), decimal_as_float=False) == "sNaN"
+
     def test_non_finite_dict_key(self):
         """A non-finite float used as a dict key follows the policy too."""
         assert obj_to_json(

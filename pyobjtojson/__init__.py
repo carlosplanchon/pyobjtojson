@@ -142,8 +142,13 @@ def _serialize_for_json(
     # Decimal → float or string
     if isinstance(obj, Decimal):
         if decimal_as_float:
-            # A Decimal can also be non-finite (Decimal("inf")/Decimal("nan")),
-            # so apply the same policy once converted to float.
+            # A Decimal can be non-finite. NaN must be detected on the Decimal
+            # itself: float(Decimal("sNaN")) raises ValueError (a signaling
+            # NaN has no float conversion), so converting first would crash
+            # before the policy could run. is_nan() covers both NaN and sNaN.
+            if obj.is_nan():
+                return _non_finite_repr(float("nan"), non_finite)
+            # Infinities are handled after the (now safe) conversion.
             as_float = float(obj)
             if not math.isfinite(as_float):
                 return _non_finite_repr(as_float, non_finite)
