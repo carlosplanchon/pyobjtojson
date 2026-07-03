@@ -138,3 +138,52 @@ class TestCircularReferences:
         assert result["a"] == {"v": 1}
         assert result["b"] == {"v": 1}
         assert result["self"] == "<circular reference>"
+
+    def test_deep_diamond_dag_serializes_quickly(self):
+        """A deeply nested diamond DAG must be serialized in linear time.
+
+        Each level shares the same child twice. Without memoization of
+        completed subtrees the traversal visits 2^30 nodes and this test
+        effectively hangs; with it, the 31 distinct dicts are walked once.
+        """
+        node = {"v": 1}
+        for _ in range(30):
+            node = {"a": node, "b": node}
+
+        result = obj_to_json(node, check_circular=True)
+
+        current = result
+        for _ in range(30):
+            assert set(current.keys()) == {"a", "b"}
+            assert current["a"] == current["b"]
+            current = current["a"]
+        assert current == {"v": 1}
+
+    def test_cycle_inside_shared_subtree(self):
+        """A shared subtree containing its own internal cycle keeps the
+        marker at the same place on every occurrence."""
+        inner = {"name": "inner"}
+        inner["self"] = inner  # cycle contained within the shared subtree
+        outer = {"left": inner, "right": inner}
+
+        result = obj_to_json(outer, check_circular=True)
+
+        assert result["left"] == {"name": "inner", "self": "<circular reference>"}
+        assert result["right"] == {"name": "inner", "self": "<circular reference>"}
+
+    def test_shared_cycle_members_are_not_wrongly_cached(self):
+        """A subtree whose serialization contains a circular marker is
+        position-dependent and must NOT be reused verbatim elsewhere.
+
+        Here a and b form a two-node cycle and BOTH are also reachable from
+        the top-level list. Serialized from the second list slot, b must be
+        expanded in full (with the marker one level deeper), not replaced by
+        the marker-bearing result cached while serializing a."""
+        a = {}
+        b = {"back": a}
+        a["child"] = b
+
+        result = obj_to_json([a, b], check_circular=True)
+
+        assert result[0] == {"child": {"back": "<circular reference>"}}
+        assert result[1] == {"back": {"child": "<circular reference>"}}
