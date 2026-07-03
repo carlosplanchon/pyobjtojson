@@ -2,6 +2,7 @@
 """Tests for standard Python types support (datetime, UUID, Decimal, etc)."""
 
 import base64
+import sys
 import pytest
 from datetime import datetime, date, time
 from decimal import Decimal
@@ -198,9 +199,39 @@ class TestEnum:
         assert result == "active"
 
     def test_int_enum(self):
-        """Test int-based Enum."""
+        """IntEnum must serialize to its plain underlying value.
+
+        ``== 3`` alone is not enough: an IntEnum member compares equal to its
+        int value, so we also assert the result is a plain int and not the
+        enum member itself. The plain-primitive fast-path used to intercept
+        IntEnum/StrEnum before the Enum branch and return the member as-is.
+        """
         result = obj_to_json(Priority.HIGH)
         assert result == 3
+        assert type(result) is int
+        assert not isinstance(result, Enum)
+
+    def test_string_enum_returns_plain_str(self):
+        """A plain Enum with string values yields a plain str, not the member."""
+        result = obj_to_json(Status.ACTIVE)
+        assert type(result) is str
+        assert not isinstance(result, Enum)
+
+    @pytest.mark.skipif(
+        sys.version_info < (3, 11),
+        reason="StrEnum was added in Python 3.11"
+    )
+    def test_str_enum(self):
+        """StrEnum must serialize to its plain underlying str value."""
+        from enum import StrEnum
+
+        class Color(StrEnum):
+            RED = "red"
+
+        result = obj_to_json(Color.RED)
+        assert result == "red"
+        assert type(result) is str
+        assert not isinstance(result, Enum)
 
     def test_enum_in_dict(self):
         """Test Enum in dictionary."""

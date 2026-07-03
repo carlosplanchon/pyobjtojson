@@ -33,6 +33,13 @@ def _serialize_for_json(
              converted more structurally.
     """
 
+    # Enum → underlying value. This must run before the primitive fast-path
+    # below: IntEnum/StrEnum members are also int/str instances, so the
+    # fast-path would otherwise return the enum member itself instead of its
+    # documented `.value`.
+    if isinstance(obj, Enum):
+        return obj.value
+
     # If it's None, bool, int, float, or str, it's already JSON-serializable.
     if obj is None or isinstance(obj, (bool, int, float, str)):
         return obj
@@ -60,10 +67,6 @@ def _serialize_for_json(
     # bytes, bytearray → base64
     if isinstance(obj, (bytes, bytearray)):
         return base64.b64encode(bytes(obj)).decode('utf-8')
-
-    # Enum → underlying value
-    if isinstance(obj, Enum):
-        return obj.value
 
     # Path → string
     if isinstance(obj, Path):
