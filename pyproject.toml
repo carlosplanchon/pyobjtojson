@@ -42,6 +42,11 @@ dev = [
 [tool.setuptools]
 packages = ["pyobjtojson"]
 
+[tool.setuptools.package-data]
+# PEP 561 marker: without it, type checkers in consumer projects ignore the
+# package's inline annotations entirely.
+pyobjtojson = ["py.typed"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
