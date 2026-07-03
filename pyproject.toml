@@ -52,12 +52,13 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+# Coverage is intentionally not enforced here: instrumenting every local
+# pytest run (and rewriting htmlcov/) makes single-test debugging slow. CI
+# passes the --cov flags explicitly; locally, use
+# `pytest --cov=pyobjtojson --cov-report=html` when you want the report.
 addopts = [
     "-v",
     "--strict-markers",
-    "--cov=pyobjtojson",
-    "--cov-report=term-missing",
-    "--cov-report=html",
 ]
 
 [tool.mypy]

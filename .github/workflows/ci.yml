@@ -36,7 +36,7 @@ jobs:
       - name: Run tests
         run: >-
           uv run --extra dev python -m pytest tests/
-          -o addopts="-v --strict-markers --cov=pyobjtojson --cov-report=term-missing"
+          --cov=pyobjtojson --cov-report=term-missing
 
       - name: Type check
         run: uv run --extra dev mypy pyobjtojson/
