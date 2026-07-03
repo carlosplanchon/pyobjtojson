@@ -143,6 +143,20 @@ class TestEdgeCases:
         assert (3, 4) not in result
         assert result["[3, 4]"] == "tuple key"
 
+    def test_mixed_equivalent_primitive_keys_mirror_json_dumps(self):
+        """int 1 and str "1" keys both pass through, mirroring json.dumps.
+
+        This is the documented exception to key normalization: json.dumps
+        emits a duplicate "1" key for this structure, exactly as it would if
+        handed the original dict, and json.loads keeps only the last entry.
+        """
+        result = obj_to_json({1: "int", "1": "str"})
+
+        assert result == {1: "int", "1": "str"}
+        dumped = json.dumps(result)
+        assert dumped == '{"1": "int", "1": "str"}'
+        assert json.loads(dumped) == {"1": "str"}
+
     def test_output_with_non_string_keys_is_json_dumpable(self):
         """The whole point of the fix: json.dumps must not raise."""
         import json

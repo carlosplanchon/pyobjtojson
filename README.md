@@ -225,7 +225,11 @@ obj_to_json(data)
 ```
 
 > **Note:** If two distinct keys normalize to the same string, the last one
-> wins. This mirrors how JSON itself collapses duplicate keys.
+> wins. Primitive keys are the exception: they pass through unconverted, so a
+> dict mixing `1` and `"1"` keeps both entries and `json.dumps` then emits a
+> duplicate `"1"` key, exactly as it does when given that dict directly.
+> Strict parsers may reject such a document, and `json.loads` keeps only the
+> last entry.
 
 ## API Reference
 
