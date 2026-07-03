@@ -171,6 +171,37 @@ class TestCircularReferences:
         assert result["left"] == {"name": "inner", "self": "<circular reference>"}
         assert result["right"] == {"name": "inner", "self": "<circular reference>"}
 
+    def test_to_dict_returning_self_is_marked_circular(self):
+        """A to_dict() that returns the object itself is a genuine cycle and
+        must be marked, not recursed until the interpreter stack is exhausted
+        (calling the side-effectful method ~1000 times on the way)."""
+        calls = 0
+
+        class Evil:
+            def to_dict(self):
+                nonlocal calls
+                calls += 1
+                return self
+
+        result = obj_to_json(Evil())
+
+        assert result == "<circular reference>"
+        assert calls == 1
+
+    def test_mutual_to_dict_cycle_is_marked_circular(self):
+        """Two objects whose to_dict() return each other form a cycle."""
+        class A:
+            def to_dict(self):
+                return b
+
+        class B:
+            def to_dict(self):
+                return a
+
+        a, b = A(), B()
+
+        assert obj_to_json({"x": a}) == {"x": "<circular reference>"}
+
     def test_shared_cycle_members_are_not_wrongly_cached(self):
         """A subtree whose serialization contains a circular marker is
         position-dependent and must NOT be reused verbatim elsewhere.

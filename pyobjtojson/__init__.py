@@ -161,13 +161,20 @@ def _serialize_for_json(
     obj_id = id(obj)
 
     # If circular checking is enabled, see if this object is already on the
-    # current traversal path. We track whether *this* frame added the id so we
-    # can remove it again on the way out (see the `finally` below). Keeping
-    # `state.path` as the active path (not every object ever seen) is what
-    # makes this real cycle detection: a shared sub-object referenced from two
-    # sibling branches (a DAG, not a cycle) must not be flagged circular.
+    # current traversal path. The membership check runs even for intermediate
+    # conversion results (_skip_circular_check=True): a conversion method such
+    # as to_dict() or model_dump() can return an object that is itself on the
+    # path (`return self`, or two objects whose to_dict() return each other),
+    # and without the check those cycles would recurse until the interpreter
+    # stack is exhausted. The flag only skips *adding* the intermediate to the
+    # path, so the converted form of an object is not treated as a separate
+    # node. We track whether *this* frame added the id so we can remove it
+    # again on the way out (see the `finally` below). Keeping `state.path` as
+    # the active path (not every object ever seen) is what makes this real
+    # cycle detection: a shared sub-object referenced from two sibling
+    # branches (a DAG, not a cycle) must not be flagged circular.
     added_to_path = False
-    if check_circular is True and not _skip_circular_check:
+    if check_circular is True:
         if obj_id in state.path:
             state.markers += 1
             return "<circular reference>"
@@ -178,8 +185,9 @@ def _serialize_for_json(
         cached = state.memo.get(obj_id)
         if cached is not None:
             return cached[1]
-        state.path.add(obj_id)
-        added_to_path = True
+        if not _skip_circular_check:
+            state.path.add(obj_id)
+            added_to_path = True
 
     markers_before = state.markers
     try:
