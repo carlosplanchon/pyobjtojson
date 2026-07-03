@@ -2,6 +2,7 @@
 """Tests for standard Python types support (datetime, UUID, Decimal, etc)."""
 
 import base64
+import json
 import sys
 import pytest
 from datetime import datetime, date, time
@@ -232,6 +233,45 @@ class TestEnum:
         assert result == "red"
         assert type(result) is str
         assert not isinstance(result, Enum)
+
+    def test_enum_with_non_primitive_values(self):
+        """Enum values are re-serialized, not returned verbatim."""
+        class Event(Enum):
+            EPOCH = datetime(1970, 1, 1)
+
+        class Price(Enum):
+            BASIC = Decimal("9.99")
+
+        class Point(Enum):
+            ORIGIN = (0, 0)
+
+        assert obj_to_json(Event.EPOCH) == "1970-01-01T00:00:00"
+        assert obj_to_json(Price.BASIC) == 9.99
+        assert obj_to_json(Price.BASIC, decimal_as_float=False) == "9.99"
+        assert obj_to_json(Point.ORIGIN) == [0, 0]
+
+    def test_enum_with_non_finite_value_follows_policy(self):
+        """A non-finite float enum value follows the non_finite policy."""
+        class Weird(Enum):
+            NAN = float("nan")
+            INF = float("inf")
+
+        assert obj_to_json(Weird.NAN) is None
+        assert obj_to_json(Weird.INF) is None
+        assert obj_to_json(Weird.NAN, non_finite="string") == "NaN"
+        assert obj_to_json(Weird.INF, non_finite="string") == "Infinity"
+
+        # The headline guarantee: default output survives strict json.dumps.
+        result = obj_to_json({"x": Weird.NAN})
+        assert result == {"x": None}
+        json.dumps(result, allow_nan=False)
+
+    def test_enum_with_bytes_value(self):
+        """A bytes enum value is base64-encoded like any other bytes."""
+        class Blob(Enum):
+            MAGIC = b"Hello"
+
+        assert obj_to_json(Blob.MAGIC) == base64.b64encode(b"Hello").decode("utf-8")
 
     def test_enum_in_dict(self):
         """Test Enum in dictionary."""

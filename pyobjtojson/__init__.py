@@ -102,9 +102,18 @@ def _serialize_for_json(
     # Enum → underlying value. This must run before the primitive fast-path
     # below: IntEnum/StrEnum members are also int/str instances, so the
     # fast-path would otherwise return the enum member itself instead of its
-    # documented `.value`.
+    # documented `.value`. The value is re-serialized rather than returned
+    # verbatim: enum values are not always JSON primitives (datetime, Decimal,
+    # tuples, non-finite floats, ...) and must get the same conversions and
+    # policies as the same value anywhere else in the structure.
     if isinstance(obj, Enum):
-        return obj.value
+        return _serialize_for_json(
+            obj=obj.value,
+            state=state,
+            check_circular=check_circular,
+            decimal_as_float=decimal_as_float,
+            non_finite=non_finite
+        )
 
     # Non-finite floats (inf, -inf, nan) have no JSON representation. Route
     # them through the chosen policy before the primitive fast-path returns
