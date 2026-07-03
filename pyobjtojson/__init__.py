@@ -407,12 +407,18 @@ def _serialize_key(
     :return: A ``json.dumps``-compatible key.
     """
     # json.dumps natively accepts these as object keys, so leave them as-is to
-    # preserve its default behavior (e.g. int key 1 -> "1"). A non-finite float
-    # key is the one exception: it must follow the non_finite policy.
-    if isinstance(key, float) and not math.isfinite(key):
-        return _non_finite_repr(key, non_finite)
-    if key is None or isinstance(key, (str, bool, int, float)):
-        return key
+    # preserve its default behavior (e.g. int key 1 -> "1"). Two exceptions:
+    # a non-finite float key must follow the non_finite policy, and Enum keys
+    # must skip the fast-path entirely. IntEnum/StrEnum (and other int/str/
+    # float mixin) members are also instances of their mixin primitive, so
+    # without the Enum check they would pass through as the enum member
+    # itself instead of its documented `.value`, the same subclass-shadowing
+    # issue _serialize_for_json guards against for values.
+    if not isinstance(key, Enum):
+        if isinstance(key, float) and not math.isfinite(key):
+            return _non_finite_repr(key, non_finite)
+        if key is None or isinstance(key, (str, bool, int, float)):
+            return key
 
     # Reuse the value machinery so typed keys become their natural scalar form.
     try:

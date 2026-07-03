@@ -178,6 +178,40 @@ class TestEdgeCases:
         assert result["red"] == "enum"
         assert result["/tmp/x"] == "path"
 
+    def test_typed_enum_keys_become_plain_scalars(self):
+        """IntEnum and str/float mixin Enum keys are unwrapped to their value.
+
+        Such members are also int/str/float instances, so the primitive key
+        fast-path used to return the member itself as the key: the same
+        subclass-shadowing bug the value path guards against.
+        """
+        from enum import Enum, IntEnum
+
+        class Priority(IntEnum):
+            HIGH = 3
+
+        class Color(str, Enum):
+            RED = "red"
+
+        result = obj_to_json({Priority.HIGH: "p", Color.RED: "c"})
+
+        assert result == {3: "p", "red": "c"}
+        keys = list(result)
+        assert type(keys[0]) is int
+        assert type(keys[1]) is str
+        assert not any(isinstance(k, Enum) for k in keys)
+        json.dumps(result)
+
+    def test_non_finite_float_enum_key_follows_policy(self):
+        """A float-mixin Enum key with a non-finite value uses non_finite."""
+        from enum import Enum
+
+        class Weird(float, Enum):
+            NAN = float("nan")
+
+        assert obj_to_json({Weird.NAN: "w"}) == {None: "w"}
+        assert obj_to_json({Weird.NAN: "w"}, non_finite="string") == {"NaN": "w"}
+
     def test_decimal_key_respects_decimal_as_float(self):
         """Decimal keys follow the same decimal_as_float option as values."""
         from decimal import Decimal
