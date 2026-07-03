@@ -9,6 +9,7 @@ This directory contains comprehensive test coverage for the `pyobjtojson` librar
 - **`test_dataclasses.py`**: Tests for dataclass serialization
 - **`test_pydantic.py`**: Tests for Pydantic model serialization (v1 and v2)
 - **`test_custom_classes.py`**: Tests for custom class serialization
+- **`test_standard_types.py`**: Tests for standard library types (datetime, UUID, Decimal, Enum, Path, etc.)
 - **`test_edge_cases.py`**: Tests for edge cases and error handling
 
 ## Running Tests
@@ -64,13 +65,7 @@ pytest -s
 ### Run type checking with mypy
 
 ```bash
-mypy pyobjtojson/__init__.py
-```
-
-Or use the convenience script:
-
-```bash
-./check_types.sh
+uv run --extra dev mypy pyobjtojson/
 ```
 
 ## Test Coverage
