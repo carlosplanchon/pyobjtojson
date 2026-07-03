@@ -2,6 +2,12 @@
 
 # pyobjtojson
 
+[![CI](https://github.com/carlosplanchon/pyobjtojson/actions/workflows/ci.yml/badge.svg)](https://github.com/carlosplanchon/pyobjtojson/actions/workflows/ci.yml)
+[![PyPI version](https://img.shields.io/pypi/v/pyobjtojson.svg)](https://pypi.org/project/pyobjtojson/)
+[![Python versions](https://img.shields.io/pypi/pyversions/pyobjtojson.svg)](https://pypi.org/project/pyobjtojson/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/carlosplanchon/pyobjtojson)
+
 A lightweight Python library that simplifies the process of serializing **any** Python object into a JSON-friendly structure without getting tripped up by circular references. With built-in support for dataclasses, Pydantic (v1 & v2), and standard Python collections, **pyobjtojson** helps you convert your objects into a cycle-free, JSON-ready format for logging, storage, or data transfer.
 
 ## Features
@@ -20,8 +26,6 @@ A lightweight Python library that simplifies the process of serializing **any** 
   No special inheritance or overrides needed. Uses reflection and standard Python methods (`__dict__`, `asdict()`, `to_dict()`, etc.) where available.
 - **Easy to Integrate**
   Just call `obj_to_json()` on your data structure. No additional configuration required.
-
-### DeepWiki Docs: [https://deepwiki.com/carlosplanchon/pyobjtojson](https://deepwiki.com/carlosplanchon/pyobjtojson)
 
 ## Installation with uv:
 
