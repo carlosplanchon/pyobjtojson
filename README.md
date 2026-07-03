@@ -82,13 +82,14 @@ obj_to_json(a, check_circular=True)  # check_circular is True by default.
 {
   "name": "A",
   "b": {
-    "circular": {
-      "name": "A",
-      "b": "<circular reference>"
-    }
+    "circular": "<circular reference>"
   }
 }
 ```
+
+The marker replaces the first object that is already being serialized on the
+current path: `a` is an ancestor of itself, so the reference back to it inside
+`b` is cut right there.
 
 ### 3. Working with Dataclasses and Pydantic
 
@@ -192,7 +193,9 @@ JSON object keys must be strings, so **pyobjtojson** normalizes non-string keys
 to keep the result compatible with `json.dumps`:
 
 - `str`, `int`, `float`, `bool`, and `None` keys are kept as-is (`json.dumps`
-  already coerces the non-string primitives to strings itself).
+  already coerces the non-string primitives to strings itself). The exception
+  is a non-finite float key (`inf`, `-inf`, `nan`), which follows the
+  `non_finite` policy like any other non-finite float.
 - Typed keys such as `UUID`, `datetime`, `Enum`, `Decimal`, and `Path` are
   converted to their natural scalar form (e.g. `UUID` → string, `datetime` →
   ISO string), respecting `decimal_as_float`.
